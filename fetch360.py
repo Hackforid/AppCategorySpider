@@ -1,8 +1,9 @@
 # -*- coding:utf-8 -*-
 import random
+import re
+import signal
 
 import requests
-from pyquery import PyQuery as pq
 
 import proxy
 
@@ -10,70 +11,81 @@ import gevent
 from gevent import monkey
 from gevent.pool import Pool
 
+from utils import retry
 
-monkey.patch_socket()
+
+monkey.patch_all()
 
 proxies_list = []
 pool = Pool(1024)
 
-def retry(fn, time=5):
-    def _(*args, **kwargs):
-        for i in range(time):
-            try:
-                return fn(*args, **kwargs)
-            except:
-                print 'retry', i
-                pass
-    return _
+def match_app_info(page):
+    p = re.compile(r"'sname': '([\S ]+)',.+?'cid2': ([\S ]+),.+?'pname': '([\S ]+)',", re.DOTALL)
+    m = p.findall(page)
+    if not m:
+        return None
+    r = m[0]
+    return {'type': r[0], 'app_name': r[1], 'package_name': r[2]}
+
+def match_apps_in_page(page):
+    p = re.compile(r'<a sid="(\d+)"')
+    ids = p.findall(page)
+    return ids[::3]
 
 @retry
-def fetch_pkg(url):
+def fetch_app(app_id):
+    url = get_app_url(app_id)
     r = requests.get(url, proxies=get_proxy(), timeout=5)
-    if r.status_code == 404:
-        print url, '404'
-        return 404
-    elif r.status_code != 200:
-        print 'status_code = ', r.status_code
-        raise Exception()
+    return r.text
+@retry
+def fetch_pages(page_id=1):
+    url = get_app_page_url(page_id)
+    r = requests.get(url, proxies=get_proxy(), timeout=5)
+    return r.text
+
+def get_app_info(app_id):
+    page = fetch_app(app_id)
+    info = match_app_info(page)
+    return info
+
+def get_apps_in_page(page_id):
+    page = fetch_pages(page_id)
+    app_ids = match_apps_in_page(page)
+
+    if not app_ids:
+        return None
     else:
-        print 'r=', r.json()
-        return r.json()
+        jobs = [pool.spawn(get_app_info, app_id) for app_id in app_ids]
+        result = []
+        for job in jobs:
+            r = job.get()
+            print r
+            result.append(r)
+        return result 
 
 
-def get_cate_url(cate_name, start = 0, count = 60):
-    return 'http://apps.wandoujia.com/api/v1/apps?tag=%s&max=%s&start=%s&opt_fields=apps.packageName' % (cate_name, count, start)
+def get_app_page_url(page_id=1):
+    return "http://zhushou.360.cn/list/index/cid/1?page=%s" % page_id 
 
+def get_app_url(app_id):
+    return "http://zhushou.360.cn/detail/index/soft_id/%s" % app_id
 
-def get_packname_by_cate(cate_name):
-    per_max = 60
-    start_pos = 0
+def spider():
+    gevent.signal(signal.SIGQUIT, gevent.kill)
     load_more = True
-    
+    start = 0
     while load_more:
-        jobs = []
-        for i in range(start_pos, start_pos+10):
-            start = i * per_max
-            url = get_cate_url(cate_name, start, per_max)
-            jobs.append(gevent.spawn(fetch_pkg, url))
+        jobs =  []
+        for i in range(start, start + 100):
+            jobs.append(gevent.spawn(get_apps_in_page, i))
 
         for job in jobs:
             r = job.get()
-            if r == 404:
+            if r is None:
                 load_more = False
 
-        start_pos += 10
+        start += 100
 
-    print 'done'
-
-
-def get_cate():
-    r = pq(url='http://www.wandoujia.com/tag/app')
-    cate_spans = r('span.cate-name')
-    return [span.text() for span in cate_spans.items() if span.text()]
-
-
-def get_proxy():
-    return random.choice(proxies_list)
 
 
 def get_proxies_list():
@@ -81,17 +93,12 @@ def get_proxies_list():
     proxy_list = proxy.fetch()
     proxies_list = [{'http': 'http://%s:%s' % (item.get('ip'), item.get('port')), 'https':'http://%s:%s' % (item.get('ip'), item.get('port'))} for item in proxy_list]
 
+def get_proxy():
+    return random.choice(proxies_list)
 
 def main():
     get_proxies_list()
-    cate_list = get_cate()
-    print cate_list
-
-    threads = [gevent.spawn(get_packname_by_cate, cate_name) for cate_name in cate_list]
-    gevent.joinall(threads)
-    #get_packname_by_cate(cate_list[1])
-
-    print 'end'
+    spider()
 
 
 if __name__ == '__main__':

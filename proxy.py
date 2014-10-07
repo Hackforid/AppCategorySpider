@@ -30,7 +30,7 @@ def get_ip_by_baidu(proxies=None):
         'http://m.baidu.com/s?word=ip&pu=sz%401321_480&wpo=fast',
         proxies=proxies, timeout=5, headers={'user-agent': 'chrome', })
     r = pq(baidu.text)
-    ip = r('span').eq(0).text()
+    ip = r('span').eq(2).text()
 
     return ip
 

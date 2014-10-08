@@ -91,7 +91,7 @@ def spider():
 
         for job in jobs:
             r = job.get()
-            if r is None:
+            if not r:
                 load_more = False
 
         start += 100

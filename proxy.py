@@ -1,5 +1,6 @@
 # -*- coding:utf-8 -*-
 import time
+import re
 
 import requests
 
@@ -101,18 +102,29 @@ def fetch_cn_proxy_com():
     return [{'ip': tds.eq(0).text(), 'port': tds.eq(1).text()} for tds in [tr('td') for tr in trs.items()]]
 
 
+@ignore_exception
+def fetch_xici():
+    r = requests.get("http://www.xici.net.co/nn/1", timeout=10)
+    p = re.compile(
+        r'<td>(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})</td>\s+<td>(\d+)</td>')
+    m = p.findall(r.text)
+    return [{'ip': ip[0], 'port': ip[1]} for ip in m]
+
+
 def fetch():
     global local_ip
     local_ip = get_local_ip()
 
-    fetch_methods = [fetch_cn_proxy_com, fetch_kuaidaili]
+    fetch_methods = [fetch_cn_proxy_com, fetch_kuaidaili, fetch_xici]
 
     ip_list = []
 
     print 'fetching proxy ips...'
     threads = [gevent.spawn(method) for method in fetch_methods]
     for thread in threads:
-        ip_list.extend(thread.get())
+        ips = thread.get()
+        if ips:
+            ip_list.extend(ips)
     print 'fetched proxy', len(ip_list)
 
     return valid_proxies(ip_list)

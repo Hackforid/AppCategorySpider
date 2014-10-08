@@ -6,6 +6,7 @@ def retry(fn, time=10):
             try:
                 return fn(*args, **kwargs)
             except:
-                print 'retry', i
+                if i == time - 1:
+                    print 'fail'
                 pass
     return _

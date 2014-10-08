@@ -17,7 +17,7 @@ from utils import retry
 monkey.patch_all()
 
 proxies_list = []
-pool = Pool(1024)
+pool = Pool(200)
 
 def match_app_info(page):
     p = re.compile(r"'sname': '([\S ]+)',.+?'cid2': ([\S ]+),.+?'pname': '([\S ]+)',", re.DOTALL)
@@ -35,12 +35,22 @@ def match_apps_in_page(page):
 @retry
 def fetch_app(app_id):
     url = get_app_url(app_id)
-    r = requests.get(url, proxies=get_proxy(), timeout=5)
+    r = requests.get(url, proxies=get_proxy(), timeout=5, headers={
+            'Connection': 'Keep-Alive',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.8,en-US;q=0.6,en;q=0.4,zh-TW;q=0.2',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.124 Safari/537.36'
+        })
     return r.text
 @retry
 def fetch_pages(page_id=1):
     url = get_app_page_url(page_id)
-    r = requests.get(url, proxies=get_proxy(), timeout=5)
+    r = requests.get(url, proxies=get_proxy(), timeout=5, headers={
+            'Connection': 'Keep-Alive',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.8,en-US;q=0.6,en;q=0.4,zh-TW;q=0.2',
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.124 Safari/537.36'
+        })
     return r.text
 
 def get_app_info(app_id):
